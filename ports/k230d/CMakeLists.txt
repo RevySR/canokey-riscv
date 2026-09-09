@@ -21,6 +21,17 @@ add_compile_definitions(K230D_CACHE_ENABLED=$<BOOL:${K230D_CACHE_ENABLED}>
     K230D_SD_CLOCK_HZ=${K230D_SD_CLOCK_HZ})
 get_filename_component(STM32_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 
+option(BUILD_SDIO_BACKEND "Build the raw SDIO-sector backend and probe" ON)
+if(BUILD_SDIO_BACKEND)
+add_executable(k230d-sd-probe src/firmware_start.S src/sd_driver.c tests/target/sd_probe.c)
+target_include_directories(k230d-sd-probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_options(k230d-sd-probe PRIVATE -Os -g3 -Wall -Wextra -Werror -ffreestanding -fno-builtin)
+target_link_options(k230d-sd-probe PRIVATE -nostdlib
+    "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/sd_probe.ld" -Wl,--gc-sections)
+set_target_properties(k230d-sd-probe PROPERTIES SUFFIX .elf
+    LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ld/sd_probe.ld")
+endif()
+
 option(BUILD_CANOKEY_CORE "Build CanoKey core libraries and firmware" ON)
 if(BUILD_CANOKEY_CORE)
     foreach(dep tinyusb/src/tusb.c littlefs/lfs.c tinycbor/src/cbor.h canokey-crypto/mbedtls/CMakeLists.txt)
@@ -112,4 +123,23 @@ if(BUILD_CANOKEY_CORE)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_image.py
             ${CMAKE_CURRENT_BINARY_DIR}/canokey-k230d.bin ${CMAKE_CURRENT_BINARY_DIR}/canokey-k230d
         DEPENDS canokey-k230d tools/make_image.py include/raw_layout.h)
+    if(BUILD_SDIO_BACKEND)
+    add_executable(canokey-k230d-sd src/firmware_start.S src/firmware.c src/identity.c src/sd_fs.c src/sd_driver.c
+        "${STM32_ROOT}/Src/usb.c" "${CMAKE_CURRENT_BINARY_DIR}/dcd_k230d.c")
+    target_include_directories(canokey-k230d-sd PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${dwc2_dir}")
+    target_compile_definitions(canokey-k230d-sd PRIVATE CANOKEY_K230D CANOKEY_STORAGE_SD K230D_SD_DRIVER
+        TUP_USBIP_DWC2 CFG_TUSB_MCU=OPT_MCU_NONE)
+    target_compile_options(canokey-k230d-sd PRIVATE -Os -g3 -Wall -Wextra -fno-strict-aliasing)
+    target_link_libraries(canokey-k230d-sd PRIVATE canokey-core c gcc)
+    target_link_options(canokey-k230d-sd PRIVATE -nostartfiles
+        "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/firmware.ld" -Wl,--gc-sections
+        "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/canokey-k230d-sd.map")
+    set_target_properties(canokey-k230d-sd PROPERTIES SUFFIX .elf
+        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ld/firmware.ld")
+    add_custom_target(canokey-k230d-sd-image
+        COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:canokey-k230d-sd> ${CMAKE_CURRENT_BINARY_DIR}/canokey-k230d-sd.bin
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_image.py
+            ${CMAKE_CURRENT_BINARY_DIR}/canokey-k230d-sd.bin ${CMAKE_CURRENT_BINARY_DIR}/canokey-k230d-sd --with-storage
+        DEPENDS canokey-k230d-sd tools/make_image.py include/raw_layout.h)
+    endif()
 endif()
