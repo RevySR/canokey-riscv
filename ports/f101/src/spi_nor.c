@@ -89,6 +89,9 @@ int f101_nor_sfdp(uint32_t address, void *data, size_t length) {
 
 /* Permit mutations only inside CanoKey's fixed raw storage area. */
 static int storage_range(uint32_t address, size_t length) {
+#ifdef F101_NOR_INSTALL
+  if (address < 0x80000u && length <= 0x80000u - address) return 1;
+#endif
   if (address >= F101_NOR_SEED_OFFSET && address < F101_NOR_STORAGE_OFFSET &&
       length <= F101_NOR_STORAGE_OFFSET - address)
     return 1;

@@ -23,6 +23,31 @@ set_target_properties(f101-psram-init PROPERTIES SUFFIX .elf
 add_custom_command(TARGET f101-psram-init POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
     $<TARGET_FILE:f101-psram-init> ${CMAKE_CURRENT_BINARY_DIR}/f101-psram-init.bin)
 
+add_executable(f101-spl EXCLUDE_FROM_ALL src/boot/start.S src/boot/boot.c
+    src/boot/platform.c src/spi_nor.c src/psram.c)
+target_include_directories(f101-spl PRIVATE include)
+target_compile_options(f101-spl PRIVATE -Os -g3 -Wall -Wextra -Werror -ffreestanding)
+target_link_libraries(f101-spl PRIVATE gcc)
+target_link_options(f101-spl PRIVATE -nostdlib -Wl,--gc-sections
+    "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/boot.ld")
+set_target_properties(f101-spl PROPERTIES SUFFIX .elf
+    LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ld/boot.ld")
+add_custom_command(TARGET f101-spl POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
+    $<TARGET_FILE:f101-spl> ${CMAKE_CURRENT_BINARY_DIR}/f101-spl.bin)
+
+add_executable(f101-nor-install tools/target/fel_start.S tools/target/nor_install.c
+    src/spi_nor.c src/boot/platform.c)
+target_include_directories(f101-nor-install PRIVATE include)
+target_compile_definitions(f101-nor-install PRIVATE F101_NOR_INSTALL)
+target_compile_options(f101-nor-install PRIVATE -Os -g3 -Wall -Wextra -Werror -ffreestanding)
+target_link_options(f101-nor-install PRIVATE -nostdlib -Wl,--gc-sections
+    "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/fel.ld")
+set_target_properties(f101-nor-install PROPERTIES SUFFIX .elf
+    LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ld/fel.ld")
+add_custom_command(TARGET f101-nor-install POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
+    $<TARGET_FILE:f101-nor-install> ${CMAKE_CURRENT_BINARY_DIR}/f101-nor-install.bin)
+add_dependencies(f101-nor-install f101-psram-init)
+
 add_executable(f101-nor-read EXCLUDE_FROM_ALL tools/target/fel_start.S
     tools/target/nor_read.c src/spi_nor.c)
 target_include_directories(f101-nor-read PRIVATE include)
@@ -122,4 +147,14 @@ if(BUILD_CANOKEY_CORE)
     add_custom_command(TARGET canokey-f101 POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
         $<TARGET_FILE:canokey-f101> ${CMAKE_CURRENT_BINARY_DIR}/canokey-f101.bin)
     add_dependencies(canokey-f101 f101-psram-init)
+    if(F101_STORAGE_NOR)
+        add_custom_target(canokey-f101-spi-image ALL
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_boot_image.py
+                --spl ${CMAKE_CURRENT_BINARY_DIR}/f101-spl.bin
+                --firmware ${CMAKE_CURRENT_BINARY_DIR}/canokey-f101.bin
+                --output ${CMAKE_CURRENT_BINARY_DIR}/canokey-f101-spi.img
+            DEPENDS canokey-f101 f101-spl
+            BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/canokey-f101-spi.img
+            VERBATIM)
+    endif()
 endif()
