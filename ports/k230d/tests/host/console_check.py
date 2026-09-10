@@ -11,7 +11,7 @@ from host_check import Ccid
 
 
 class WebUsb:
-    def __init__(self):
+    def __init__(self, expected_product):
         import usb.core
         import usb.util
         self.util = usb.util
@@ -25,7 +25,7 @@ class WebUsb:
         self.interface = interfaces[0].bInterfaceNumber
         self.util.claim_interface(self.dev, self.interface)
         product = self.util.get_string(self.dev, self.dev.iProduct)
-        if product != 'CanoKey K230D Zero':
+        if product != expected_product:
             raise RuntimeError(f'Unexpected USB product name: {product}')
         header = bytes(self.dev.ctrl_transfer(0x80, 6, 0x0f00, 0, 5, timeout=2000))
         if len(header) != 5 or header[1] != 15:
@@ -67,8 +67,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--transport', choices=['ccid', 'webusb'], default='ccid')
     parser.add_argument('--settings', action='store_true')
+    parser.add_argument('--product', default='CanoKey K230D Zero')
     args = parser.parse_args()
-    card = Ccid() if args.transport == 'ccid' else WebUsb()
+    card = Ccid() if args.transport == 'ccid' else WebUsb(args.product)
     try:
         card.select('f000000000')
         serial = card.apdu(bytes.fromhex('0032000000'))
@@ -83,7 +84,7 @@ def main():
         if not (3, 0, 0) <= parsed < (3, 1, 0):
             raise RuntimeError(f'Expected Core 3.0.x / Console function-set v4, got {version}')
         model = card.apdu(bytes.fromhex('0031010000')).decode('utf-8')
-        if not model.startswith('CanoKey K230D Zero ('):
+        if not model.startswith(args.product + ' ('):
             raise RuntimeError(f'Unexpected Console model: {model}')
         card.apdu(bytes.fromhex('0032010000'))  # optional chip ID may be empty
         nfc = card.apdu(bytes.fromhex('0014000000'))

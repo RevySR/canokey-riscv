@@ -18,6 +18,8 @@ from host_check import Ccid
 parser = argparse.ArgumentParser(description='Destructive FIDO2 PIN, resident credential and Large Blob tests')
 parser.add_argument('--destructive', action='store_true', required=True)
 parser.add_argument('--debug-presence', action='store_true', required=True)
+parser.add_argument('--port', choices=['k230d', 'f101'], default='k230d')
+parser.add_argument('--serial', default='/dev/ttyUSB0')
 parser.add_argument('--elf', type=Path, default=ROOT / 'build/canokey-k230d-sd.elf')
 args = parser.parse_args()
 
@@ -42,7 +44,8 @@ reset()
 try:
     old_argv = sys.argv
     try:
-        sys.argv = [str(ROOT / 'tests/host/fido_sign_check.py'), '--debug-presence', '--elf', str(args.elf)]
+        sys.argv = [str(ROOT.parent / args.port / 'tests/host/fido_sign_check.py'), '--debug-presence']
+        sys.argv += ['--serial', args.serial] if args.port == 'f101' else ['--elf', str(args.elf)]
         fixture = runpy.run_path(sys.argv[0], run_name='__main__')
     finally:
         sys.argv = old_argv
@@ -66,12 +69,12 @@ try:
         cp.get_pin_token('123456')
         assert cp.get_pin_retries()[0] == 8
         print('PASS: wrong PIN and retry recovery', flush=True)
-        rp = 'k230d-suite.test'
+        rp = f'{args.port}-suite.test'
         credentials = []
         for i in range(3):
             digest = hashlib.sha256(b'extended-create' + bytes([i])).digest()
             token = cp.get_pin_token('123456', ClientPin.PERMISSION.MAKE_CREDENTIAL, rp)
-            result = call(ctap.make_credential, digest, {'id': rp, 'name': 'K230D test'}, {'id': bytes([i]), 'name': f'user{i}', 'displayName': f'Test user {i}'}, [{'type': 'public-key', 'alg': -7}], options={'rk': True}, extensions={'largeBlobKey': True}, pin_uv_param=cp.protocol.authenticate(token, digest), pin_uv_protocol=2)
+            result = call(ctap.make_credential, digest, {'id': rp, 'name': f'{args.port} test'}, {'id': bytes([i]), 'name': f'user{i}', 'displayName': f'Test user {i}'}, [{'type': 'public-key', 'alg': -7}], options={'rk': True}, extensions={'largeBlobKey': True}, pin_uv_param=cp.protocol.authenticate(token, digest), pin_uv_protocol=2)
             credential = result.auth_data.credential_data
             fixture['cert'].public_key().verify(result.att_stmt['sig'], bytes(result.auth_data) + digest, fixture['ec'].ECDSA(fixture['hashes'].SHA256()))
             assert result.auth_data.is_user_verified() and result.large_blob_key
