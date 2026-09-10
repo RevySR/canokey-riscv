@@ -11,3 +11,5 @@ int f101_nor_sfdp(uint32_t address, void *data, size_t length);
 int f101_nor_program(uint32_t address, const void *data, size_t length);
 int f101_nor_erase(uint32_t address);
 void f101_nor_idle(void);
+#define F101_NOR_SEED_OFFSET 0xfbe000u
+#define F101_NOR_SEED_SIZE 0x2000u

@@ -1,8 +1,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include "platform.h"
 #include <mbedtls/ctr_drbg.h>
+#include <memzero.h>
 #include <stdio.h>
 #include <string.h>
+#if F101_STORAGE_NOR
+#include "seed_journal.h"
+#endif
 #define REG(a) (*(volatile uint32_t *)(a))
 
 uint64_t f101_time(void) {
@@ -32,12 +36,17 @@ void f101_uart_init(void) {
   REG(0x02500408) = 7;
 }
 
-/* RAM development only: a fresh host OS seed is required on every load. */
+/* FEL uses fresh host entropy; SPI boot consumes the persistent journal. */
 static mbedtls_ctr_drbg_context rng;
 static bool seeded;
 
 static int host_entropy(void *ctx, unsigned char *out, size_t len) {
-  (void)ctx;
+  if (ctx) {
+    if (len != 48) return -1;
+    memcpy(out, ctx, 48);
+    memzero(ctx, 48);
+    return 0;
+  }
   volatile uint8_t *seed = (volatile uint8_t *)0x40fff000;
   if (REG(0x40fff000) != 0x53454544 || len != 48) return -1;
   for (unsigned i = 0; i < len; i++) {
@@ -52,7 +61,22 @@ int f101_rng_init(void) {
   mbedtls_ctr_drbg_init(&rng);
   mbedtls_ctr_drbg_set_entropy_len(&rng, 48);
   mbedtls_ctr_drbg_set_nonce_len(&rng, 0);
-  int rc = mbedtls_ctr_drbg_seed(&rng, host_entropy, NULL, (const unsigned char *)"F101 RAM", 8);
+  uint8_t seed[48];
+  void *source = NULL;
+#if F101_STORAGE_NOR
+  if (REG(0x40fff000) != 0x53454544) {
+    if (f101_seed_take(seed)) return -1;
+    source = seed;
+  }
+#endif
+  int rc = mbedtls_ctr_drbg_seed(&rng, host_entropy, source, (const unsigned char *)"F101 RNG", 8);
+#if F101_STORAGE_NOR
+  if (!rc && source) {
+    rc = mbedtls_ctr_drbg_random(&rng, seed, sizeof(seed));
+    if (!rc) rc = f101_seed_save(seed);
+  }
+#endif
+  memzero(seed, sizeof(seed));
   mbedtls_ctr_drbg_set_reseed_interval(&rng, 0x7fffffff);
   seeded = rc == 0;
   return rc;
