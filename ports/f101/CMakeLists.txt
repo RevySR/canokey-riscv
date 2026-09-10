@@ -78,6 +78,33 @@ if(BUILD_CANOKEY_CORE)
     add_compile_definitions(TUP_DCD_ENDPOINT_MAX=8
         MBEDTLS_CONFIG_FILE="${STM32_ROOT}/Inc/mbedtls-config.h")
     add_subdirectory("${STM32_ROOT}/canokey-core" core)
+    option(F101_CE_AES "Use the F101 CE for AES and CTR_DRBG" ON)
+    set(mbedtls_dir "${STM32_ROOT}/canokey-core/canokey-crypto/mbedtls")
+    if(F101_CE_AES)
+        target_compile_definitions(mbedcrypto PRIVATE MBEDTLS_AES_SETKEY_ENC_ALT
+            MBEDTLS_AES_SETKEY_DEC_ALT MBEDTLS_AES_ENCRYPT_ALT MBEDTLS_AES_DECRYPT_ALT)
+        target_include_directories(mbedcrypto PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
+            "${STM32_ROOT}/canokey-core/canokey-crypto/include")
+        file(READ "${mbedtls_dir}/library/aes.c" aes_source)
+        set(aes_free_body "    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_aes_context ) );")
+        string(FIND "${aes_source}" "${aes_free_body}" aes_free_offset)
+        if(aes_free_offset EQUAL -1)
+            message(FATAL_ERROR "Pinned AES free changed; review CE key cleanup")
+        endif()
+        string(REPLACE "${aes_free_body}"
+            "    extern void f101_ce_aes_forget(void);\n    f101_ce_aes_forget();\n${aes_free_body}"
+            aes_source "${aes_source}")
+        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/aes_f101.c" "${aes_source}")
+        get_target_property(crypto_sources mbedcrypto SOURCES)
+        list(FILTER crypto_sources EXCLUDE REGEX "(^|/)aes.c$")
+        list(APPEND crypto_sources "${CMAKE_CURRENT_BINARY_DIR}/aes_f101.c"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/ce_aes.c")
+        set_property(TARGET mbedcrypto PROPERTY SOURCES "${crypto_sources}")
+        # The pinned AES file keeps software table helpers behind the ALT hooks.
+        set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/aes_f101.c"
+            TARGET_DIRECTORY mbedcrypto PROPERTY COMPILE_OPTIONS
+            "-Wno-unused-function;-Wno-unused-variable")
+    endif()
     option(F101_CRYPTO_SPEED "Optimize CPU-bound crypto for speed" ON)
     if(F101_CRYPTO_SPEED)
         target_compile_options(mbedcrypto PRIVATE -O2)
@@ -129,6 +156,20 @@ if(BUILD_CANOKEY_CORE)
     execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/adapt_musb.py
         ${STM32_ROOT}/canokey-core/tinyusb/src/portable/sunxi ${CMAKE_CURRENT_BINARY_DIR}
         COMMAND_ERROR_IS_FATAL ANY)
+    add_executable(f101-aes-test EXCLUDE_FROM_ALL tests/target/aes_start.S
+        tests/target/aes_backend_test.c src/boot/platform.c)
+    target_include_directories(f101-aes-test PRIVATE include)
+    target_compile_definitions(f101-aes-test PRIVATE F101_CE_AES=$<BOOL:${F101_CE_AES}>)
+    target_compile_options(f101-aes-test PRIVATE -O2 -g3 -Wall -Wextra -Werror -ffreestanding)
+    target_link_libraries(f101-aes-test PRIVATE canokey-crypto c gcc)
+    target_link_options(f101-aes-test PRIVATE -nostartfiles -Wl,--gc-sections
+        "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/aes_test.ld")
+    set_target_properties(f101-aes-test PROPERTIES SUFFIX .elf
+        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ld/aes_test.ld")
+    add_custom_command(TARGET f101-aes-test POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
+        $<TARGET_FILE:f101-aes-test> ${CMAKE_CURRENT_BINARY_DIR}/f101-aes-test.bin)
+    add_dependencies(f101-aes-test f101-psram-init)
+
     option(F101_STORAGE_NOR "Store credentials in SPI NOR" ON)
     if(F101_STORAGE_NOR)
         set(storage_sources src/nor_fs.c src/spi_nor.c src/seed_journal.c)
@@ -138,7 +179,7 @@ if(BUILD_CANOKEY_CORE)
     add_executable(canokey-f101 src/firmware_start.S src/firmware.c src/identity.c ${storage_sources} src/platform.c
         "${STM32_ROOT}/Src/usb.c" "${CMAKE_CURRENT_BINARY_DIR}/dcd_f101.c")
     target_include_directories(canokey-f101 PRIVATE include "${CMAKE_CURRENT_BINARY_DIR}")
-    target_compile_definitions(canokey-f101 PRIVATE CANOKEY_F101 F101_STORAGE_NOR=$<BOOL:${F101_STORAGE_NOR}> CFG_TUSB_MCU=OPT_MCU_NONE)
+    target_compile_definitions(canokey-f101 PRIVATE CANOKEY_F101 F101_CE_AES=$<BOOL:${F101_CE_AES}> F101_STORAGE_NOR=$<BOOL:${F101_STORAGE_NOR}> CFG_TUSB_MCU=OPT_MCU_NONE)
     target_compile_options(canokey-f101 PRIVATE -Os -g3 -Wall -Wextra -fno-strict-aliasing)
     target_link_libraries(canokey-f101 PRIVATE canokey-core c gcc)
     target_link_options(canokey-f101 PRIVATE -nostartfiles "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/firmware.ld"
