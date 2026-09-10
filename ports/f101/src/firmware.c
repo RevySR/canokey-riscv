@@ -33,6 +33,7 @@ static void (*timeout_callback)(void);
 static uint32_t timeout_deadline;
 static uint32_t touch_tick;
 int f101_ramfs_init(void);
+int f101_norfs_init(void);
 int f101_identity_init(void);
 
 static uint32_t ticks(void) {
@@ -96,6 +97,10 @@ static void service(void) {
   servicing = false;
 }
 
+void f101_nor_idle(void) {
+  service();
+}
+
 /* Prime generation can exceed the CCID host timeout. Service USB and its
  * time-extension timer between crypto RNG requests, without recursively
  * dispatching application commands through device_loop(). */
@@ -153,7 +158,13 @@ __attribute__((noreturn)) static void fail(uint64_t reason) {
   for (;;) {
   }
 }
-
+#if F101_STORAGE_NOR
+#define F101_VERSION "3.0.2-f101-nor-dev"
+#define F101_VARIANT "CanoKey F101 YuzukiNeko (SPI NOR)"
+#else
+#define F101_VERSION "3.0.2-f101-ram-dev"
+#define F101_VARIANT "CanoKey F101 YuzukiNeko (RAM)"
+#endif
 static int admin_string(const CAPDU *capdu, RAPDU *rapdu, const char *s) {
   LL = strlen(s);
   if (LL > LE) LL = LE;
@@ -162,11 +173,11 @@ static int admin_string(const CAPDU *capdu, RAPDU *rapdu, const char *s) {
 }
 
 int admin_vendor_version(const CAPDU *capdu, RAPDU *rapdu) {
-  return admin_string(capdu, rapdu, "3.0.2-f101-ram-dev");
+  return admin_string(capdu, rapdu, F101_VERSION);
 }
 
 int admin_vendor_hw_variant(const CAPDU *capdu, RAPDU *rapdu) {
-  return admin_string(capdu, rapdu, "CanoKey F101 YuzukiNeko (RAM)");
+  return admin_string(capdu, rapdu, F101_VARIANT);
 }
 
 int admin_vendor_specific(const CAPDU *capdu, RAPDU *rapdu) {
@@ -193,14 +204,18 @@ void firmware_main(void) {
   firmware_state.stage = 1;
   errno = 0;
   f101_uart_init();
-  puts("CanoKey F101: RAM development firmware");
+  puts(F101_VARIANT);
   uint32_t boot_start = ticks();
   *(volatile uint8_t *)0x04100040 &= ~(1u << 6);
   if (f101_rng_init()) fail(0x524e47);
   if (f101_identity_init()) fail(0x554944);
   firmware_state.stage = 2;
   uint32_t storage_start = ticks();
+#if F101_STORAGE_NOR
+  if (f101_norfs_init()) fail(0x4653);
+#else
   if (f101_ramfs_init()) fail(0x4653);
+#endif
 
   firmware_state.storage_ms = ticks() - storage_start;
   firmware_state.stage = 3;

@@ -23,6 +23,18 @@ set_target_properties(f101-psram-init PROPERTIES SUFFIX .elf
 add_custom_command(TARGET f101-psram-init POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
     $<TARGET_FILE:f101-psram-init> ${CMAKE_CURRENT_BINARY_DIR}/f101-psram-init.bin)
 
+add_executable(f101-nor-read EXCLUDE_FROM_ALL tools/target/fel_start.S
+    tools/target/nor_read.c src/spi_nor.c)
+target_include_directories(f101-nor-read PRIVATE include)
+target_compile_options(f101-nor-read PRIVATE -Os -g3 -Wall -Wextra -Werror -ffreestanding)
+target_link_options(f101-nor-read PRIVATE -nostdlib -Wl,--gc-sections
+    "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/fel.ld")
+set_target_properties(f101-nor-read PROPERTIES SUFFIX .elf
+    LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ld/fel.ld")
+add_custom_command(TARGET f101-nor-read POST_BUILD COMMAND ${CMAKE_OBJCOPY} -O binary
+    $<TARGET_FILE:f101-nor-read> ${CMAKE_CURRENT_BINARY_DIR}/f101-nor-read.bin)
+add_dependencies(f101-nor-read f101-psram-init)
+
 option(BUILD_CANOKEY_CORE "Build CanoKey core libraries and firmware" ON)
 if(BUILD_CANOKEY_CORE)
     option(F101_BITMANIP "Use Zba/Zbb/Zbc/Zbs integer extensions" ON)
@@ -92,10 +104,16 @@ if(BUILD_CANOKEY_CORE)
     execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/adapt_musb.py
         ${STM32_ROOT}/canokey-core/tinyusb/src/portable/sunxi ${CMAKE_CURRENT_BINARY_DIR}
         COMMAND_ERROR_IS_FATAL ANY)
-    add_executable(canokey-f101 src/firmware_start.S src/firmware.c src/identity.c src/ramfs.c src/platform.c
+    option(F101_STORAGE_NOR "Store credentials in SPI NOR" ON)
+    if(F101_STORAGE_NOR)
+        set(storage_sources src/nor_fs.c src/spi_nor.c)
+    else()
+        set(storage_sources src/ramfs.c)
+    endif()
+    add_executable(canokey-f101 src/firmware_start.S src/firmware.c src/identity.c ${storage_sources} src/platform.c
         "${STM32_ROOT}/Src/usb.c" "${CMAKE_CURRENT_BINARY_DIR}/dcd_f101.c")
     target_include_directories(canokey-f101 PRIVATE include "${CMAKE_CURRENT_BINARY_DIR}")
-    target_compile_definitions(canokey-f101 PRIVATE CANOKEY_F101 CFG_TUSB_MCU=OPT_MCU_NONE)
+    target_compile_definitions(canokey-f101 PRIVATE CANOKEY_F101 F101_STORAGE_NOR=$<BOOL:${F101_STORAGE_NOR}> CFG_TUSB_MCU=OPT_MCU_NONE)
     target_compile_options(canokey-f101 PRIVATE -Os -g3 -Wall -Wextra -fno-strict-aliasing)
     target_link_libraries(canokey-f101 PRIVATE canokey-core c gcc)
     target_link_options(canokey-f101 PRIVATE -nostartfiles "-T${CMAKE_CURRENT_SOURCE_DIR}/ld/firmware.ld"
