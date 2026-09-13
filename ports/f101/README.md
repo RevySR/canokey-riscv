@@ -132,6 +132,73 @@ Debug 版本输出启动进度和异常信息。串口确认输入在两种构�
 目前未实现物理确认 GPIO，串口确认仅用于开发测试，不能作为产品的物理
 用户在场机制。
 
+## CH347F JTAG 调试
+
+CH347 使用 3.3 V JTAG 电平，F101 由自身 USB 供电，双方共地。
+
+### TF 卡槽触点
+
+以下编号是 TF/microSD 卡的标准金手指编号，不是转接板排针编号。
+金手指朝向自己、插入端朝上时，从左到右为 1–8；侧边斜阶凹口位于 1 脚一侧。
+
+| TF 触点 | SD 信号 | F101 引脚 | JTAG 接法 |
+| --- | --- | --- | --- |
+| 1 | DAT2 | PF5 | CH347 TCK |
+| 2 | DAT3 | PF4 | 不接 |
+| 3 | CMD | PF3 | CH347 TDO |
+| 4 | VDD | 卡槽 3.3 V 电源 | 仅供调试器外部 VTref 输入使用 |
+| 5 | CLK | PF2 | 不接 |
+| 6 | VSS | GND | CH347 GND |
+| 7 | DAT0 | PF1 | CH347 TDI |
+| 8 | DAT1 | PF0 | CH347 TMS |
+
+TCK 接 DAT2，不能接 SD_CLK；TDI、TDO 按同名信号连接，不交叉。
+卡槽没有 TRST 或 CPU 复位信号。CH347 模块若标的是 3V3 电源输出，
+该输出脚保持不接，不能当作 VTref 输入连接卡槽电源。
+
+### Hypercard CPU/MCU 排针
+
+对于带有 CPU、MCU 两列，各列依次标注 GND、TCK、VREF、TMS 的 Hypercard
+插卡转接板，按下表连接。该丝印用于双路两线调试，和 F101 四线 JTAG 的
+功能不同；F101 需要同时使用两列排针。
+
+| 转接卡列 | 列内脚号与丝印 | 实际 TF 触点 | 接 CH347 |
+| --- | --- | --- | --- |
+| CPU | 1 / GND | 6 / VSS | GND |
+| CPU | 2 / TCK | 8 / DAT1 | **TMS** |
+| CPU | 3 / VREF | 4 / VDD | 仅接外部 VTref 输入，否则不接 |
+| CPU | 4 / TMS | 1 / DAT2 | **TCK** |
+| MCU | 1 / GND | 6 / VSS | GND，与 CPU 列共地 |
+| MCU | 2 / TCK | 3 / CMD | **TDO** |
+| MCU | 3 / VREF | 4 / VDD | 与 CPU 列 VREF 相连 |
+| MCU | 4 / TMS | 7 / DAT0 | **TDI** |
+
+按板上列名和行丝印定位，连接关系为：
+
+```text
+卡上丝印          CPU 列接 CH347       MCU 列接 CH347
+GND  (1)             GND                 GND
+TCK  (2)             TMS                 TDO
+VREF (3)          外部参考输入         同一条卡槽电源
+TMS  (4)             TCK                 TDI
+```
+
+### 启动 OpenOCD
+
+使用启用 `ch347` 驱动的 OpenOCD，并为 USB 设备 `1a86:55de` 配置访问权限。
+进入 FEL 后设置卡槽复用和调试时钟，再启动 OpenOCD：
+
+```sh
+xfel jtag
+xfel write32 0x0200178c 0x10001
+/path/to/openocd/src/openocd -s /path/to/openocd/tcl \
+  -f ports/f101/openocd/ch347.cfg
+```
+
+连接后自动输出 CPU 型号、硬件版本、MISA 和 MCPUID；也可执行
+`f101_cpu_info` 再次查询。查询会短暂暂停正在运行的 CPU，结束后恢复；
+已经暂停的 CPU 保持暂停。GDB 端口为 `3333`，仅监听本机。
+
 ## 随机数状态
 
 FEL 加载时，主机在 `0x40FFF004` 提供 48 字节新随机数据，并在

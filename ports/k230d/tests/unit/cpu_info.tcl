@@ -94,10 +94,21 @@ dict set regs marchid 0x8000000000000001
 k230d_cpu_info
 check {[lsearch -exact $output "  Model: Unknown"] >= 0}
 # Version fields must not include the index or unrelated low bits.
-check {[k230d_cpuid_revision [dict create 0 0x0914030d 1 0x13a9babc]] eq "R3S42P27"}
-check {[k230d_cpuid_revision [dict create 0 0x0914030d 1 0x1fffffff]] eq "R15S63P63"}
-check {[k230d_cpuid_revision [dict create 0 0x0914030d 1 0x10000000]] eq "R0S0P0"}
-check {[k230d_cpuid_revision [dict create 0 0x0914030d]] eq "Unknown"}
-check {[k230d_cpuid_revision [dict create 0 0x0914030e 1 0x10050000]] eq "Unknown"}
-check {[k230d_cpuid_revision [dict create 0 0x0914030d 1 0x20050000]] eq "Unknown"}
+check {[xuantie_cpuid_revision [dict create 0 0x0914030d 1 0x13a9babc]] eq "R3S42P27"}
+check {[xuantie_cpuid_revision [dict create 0 0x0914030d 1 0x1fffffff]] eq "R15S63P63"}
+check {[xuantie_cpuid_revision [dict create 0 0x0914030d 1 0x10000000]] eq "R0S0P0"}
+check {[xuantie_cpuid_revision [dict create 0 0x0914030d]] eq "Unknown"}
+check {[xuantie_cpuid_revision [dict create 0 0x0914030f 1 0x10050000]] eq "Unknown"}
+check {[xuantie_cpuid_revision [dict create 0 0x0914030d 1 0x20050000]] eq "Unknown"}
+prepare running
+dict set regs marchid 0x89180e00
+dict set regs misa 0x40b4112d
+set words {0x0918090e 0x10010000 0x20000002 0x30030056 0x46180000 0x50000000 0x68000800}
+k230d_cpu_info
+check {[lsearch -exact $output "  Model: XuanTie C907FDV-rv32"] >= 0}
+check {[lsearch -exact $output "  Revision: R0S0P16"] >= 0}
+check {[lsearch -exact $output "  Hart: 0, XLEN: 32"] >= 0}
+check {$state eq "running" && $resumes == 1}
+check {[xuantie_cpuid_revision [dict create 0 0x0918090e 1 0x13a9babc]] eq "R3S42P27"}
+
 puts "PASS: CPU identification and revision, MCPUID rotation, target state and error recovery"
