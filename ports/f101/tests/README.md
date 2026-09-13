@@ -71,12 +71,15 @@ cc -Wall -Wextra -Werror -Iports/f101/include \
 
 ## AES 后端
 
-后端独立测试包含标准向量、交替密钥与加解密方向、原地/非对齐缓冲区、
-CBC/CTR 和确定性 CTR_DRBG 摘要，并检查硬件密钥清理：
+后端独立测试通过串口报告结果，使用 Debug 构建。测试包含标准向量、交替密钥
+与加解密方向、原地/非对齐缓冲区、CBC/CTR 和确定性 CTR_DRBG 摘要，
+并检查硬件密钥清理：
 
 ```sh
-cmake --build ports/f101/build --target f101-aes-test
-python3 ports/f101/tools/load_firmware.py ports/f101/build/f101-aes-test.bin
+cmake -S ports/f101 -B ports/f101/build-debug \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain.cmake -DCMAKE_BUILD_TYPE=Debug
+cmake --build ports/f101/build-debug --target f101-aes-test
+python3 ports/f101/tools/load_firmware.py ports/f101/build-debug/f101-aes-test.bin
 ```
 
 用另一构建目录配置 `-DF101_CE_AES=OFF`，可运行同一测试作软件对照。

@@ -11,11 +11,15 @@ uint64_t f101_time(void) {
 }
 
 void f101_putchar(char c) {
+#if F101_DEBUG
   if (c == '\n') f101_putchar('\r');
   unsigned timeout = 1000000;
   while (!(REG(0x0250047c) & 2) && --timeout) {
   }
   if (timeout) REG(0x02500400) = (uint8_t)c;
+#else
+  (void)c;
+#endif
 }
 
 void f101_uart_init(void) {

@@ -4,8 +4,12 @@
 #include "spi_nor.h"
 
 static void text(const char *s) {
+#if F101_DEBUG
   while (*s)
     f101_putchar(*s++);
+#else
+  (void)s;
+#endif
 }
 
 __attribute__((noreturn)) void boot_fault(void) {
@@ -40,8 +44,10 @@ void boot_main(void) {
   /* Cold boot must never treat uninitialized PSRAM as a host entropy block. */
   *(volatile uint32_t *)0x40fff000 = 0;
   text("CanoKey SPL: starting application\n");
+#if F101_DEBUG
   while (!(*(volatile uint32_t *)0x02500414 & 0x40)) {
   }
+#endif
   __asm__ volatile("fence rw,rw; fence.i" ::: "memory");
   ((void (*)(void))image)();
   boot_fault();

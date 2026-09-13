@@ -152,7 +152,7 @@ void device_spinlock_unlock(volatile uint32_t *p) {
 }
 
 __attribute__((noreturn)) static void fail(uint64_t reason) {
-  printf("Fatal: %08lx\n", (unsigned long)reason);
+  F101_LOG("Fatal: %08lx\n", (unsigned long)reason);
   firmware_state.error = reason;
   firmware_state.stage = UINT64_MAX;
   for (;;) {
@@ -204,7 +204,7 @@ void firmware_main(void) {
   firmware_state.stage = 1;
   errno = 0;
   f101_uart_init();
-  puts(F101_VARIANT);
+  F101_LOG(F101_VARIANT "\n");
   uint32_t boot_start = ticks();
   *(volatile uint8_t *)0x04100040 &= ~(1u << 6);
   if (f101_rng_init()) fail(0x524e47);
@@ -235,7 +235,7 @@ void firmware_main(void) {
   firmware_state.usb_ms = ticks() - usb_start;
   firmware_state.boot_ms = ticks() - boot_start;
   firmware_state.stage = 5;
-  printf("USB ready: %lu ms\n", (unsigned long)firmware_state.boot_ms);
+  F101_LOG("USB ready: %lu ms\n", (unsigned long)firmware_state.boot_ms);
   for (;;) {
     service();
     device_loop(0);

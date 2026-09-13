@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include "platform.h"
 #include "spi_nor.h"
 #include <fs.h>
-#include <stdio.h>
+
 static uint8_t read_cache[LFS_CACHE_SIZE], write_cache[LFS_CACHE_SIZE], lookahead[16];
 
 static int bounds(lfs_block_t b, lfs_off_t o, lfs_size_t n) {
@@ -34,6 +35,7 @@ static int sync_block(const struct lfs_config *c) {
   (void)c;
   return 0;
 }
+
 static const struct lfs_config config = {
     .read = read_block,
     .prog = prog_block,
@@ -54,8 +56,8 @@ static const struct lfs_config config = {
 int f101_norfs_init(void) {
   uint8_t id[3], block[256];
   if (f101_nor_init(id) || id[0] != 0x85 || id[1] != 0x20 || id[2] != 0x18) return -1;
-  printf("SPI NOR: %02x%02x%02x, storage 0x%lx + 0x%lx\n", id[0], id[1], id[2], (unsigned long)F101_NOR_STORAGE_OFFSET,
-         (unsigned long)F101_NOR_STORAGE_SIZE);
+  F101_LOG("SPI NOR: %02x%02x%02x, storage 0x%lx + 0x%lx\n", id[0], id[1], id[2],
+           (unsigned long)F101_NOR_STORAGE_OFFSET, (unsigned long)F101_NOR_STORAGE_SIZE);
   /* Only a completely erased storage area may be initialized. A failed
    * mount of existing data is an error, never permission to erase keys. */
   int blank = 1;
@@ -68,7 +70,7 @@ int f101_norfs_init(void) {
       }
   }
   if (blank) {
-    puts("Formatting blank NOR storage");
+    F101_LOG("Formatting blank NOR storage\n");
     int rc = fs_format(&config);
     if (rc) return rc;
   }

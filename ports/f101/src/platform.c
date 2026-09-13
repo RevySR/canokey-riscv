@@ -2,7 +2,6 @@
 #include "platform.h"
 #include <mbedtls/ctr_drbg.h>
 #include <memzero.h>
-#include <stdio.h>
 #include <string.h>
 #if F101_STORAGE_NOR
 #include "seed_journal.h"
@@ -18,11 +17,15 @@ uint64_t f101_time(void) {
 }
 
 void f101_putchar(char c) {
+#if F101_DEBUG
   if (c == '\n') f101_putchar('\r');
   unsigned timeout = 1000000;
   while (!(REG(0x0250047c) & 2) && --timeout) {
   }
   if (timeout) REG(0x02500400) = (uint8_t)c;
+#else
+  (void)c;
+#endif
 }
 
 void f101_uart_init(void) {
@@ -85,7 +88,7 @@ int f101_rng_init(void) {
 uint32_t random32(void) {
   uint32_t result;
   if (!seeded || mbedtls_ctr_drbg_random(&rng, (unsigned char *)&result, sizeof(result))) {
-    puts("Random source unavailable");
+    F101_LOG("Random source unavailable\n");
     for (;;) {
     }
   }
@@ -93,8 +96,11 @@ uint32_t random32(void) {
 }
 
 void f101_trap(uint32_t cause, uint32_t pc, uint32_t value) {
+  (void)cause;
+  (void)pc;
+  (void)value;
   f101_uart_init();
-  printf("Trap cause=%08lx pc=%08lx value=%08lx\n", (unsigned long)cause, (unsigned long)pc, (unsigned long)value);
+  F101_LOG("Trap cause=%08lx pc=%08lx value=%08lx\n", (unsigned long)cause, (unsigned long)pc, (unsigned long)value);
   for (;;) {
   }
 }
