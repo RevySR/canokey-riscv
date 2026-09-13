@@ -18,9 +18,9 @@ proc k230d_print_cpu_info {target regs cpuid} {
     set arch [dict get $regs marchid]
     set misa [dict get $regs misa]
     set model "Unknown"
-    # Match the complete identification read from K230D CPU0, not IDCODE alone.
+    # Match the complete identification words for the two K230D C908 variants, not IDCODE alone.
     if {$vendor == 0x5b7 && $arch == 0x8000000009140d00 &&
-        [dict exists $cpuid 0] && [dict get $cpuid 0] == 0x0914030d} {
+        [dict exists $cpuid 0] && ([dict get $cpuid 0] == 0x0914030d || [dict get $cpuid 0] == 0x09140b0d)} {
         set model "XuanTie C908"
     }
 

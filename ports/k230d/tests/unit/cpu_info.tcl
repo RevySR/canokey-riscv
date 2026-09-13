@@ -83,6 +83,13 @@ check {[catch {k230d_cpu_info}] == 1}
 check {$halts == 0 && $resumes == 0 && $selected eq "other.cpu"}
 
 prepare halted
+set words [lreplace $words 0 0 0x09140b0d]
+dict set regs misa 0x8000000000b4112f
+k230d_cpu_info
+check {[lsearch -exact $output "  Model: XuanTie C908"] >= 0}
+check {[lsearch -exact $output "  MISA extensions: A B C D F I M S U V X"] >= 0}
+
+prepare halted
 dict set regs marchid 0x8000000000000001
 k230d_cpu_info
 check {[lsearch -exact $output "  Model: Unknown"] >= 0}

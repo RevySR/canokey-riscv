@@ -93,6 +93,28 @@ sudo dd if=ports/k230d/build/canokey-k230d-sd.img of=/dev/sdX bs=4M conv=fsync s
   -f ports/k230d/openocd/ch347.cfg
 ```
 
+### CH347F 双核连接
+
+CPU0 和 CPU1 共用一个 JTAG TAP，DM 地址分别为 `0x000` 和 `0x400`。
+两核已经启动时，可用以下命令连接并显示两核信息：
+
+```sh
+/path/to/openocd/src/openocd -s /path/to/openocd/tcl \
+  -f ports/k230d/openocd/ch347-dual.cfg
+```
+
+CPU1 若被保持在复位状态，默认只报告该状态。显式允许解除 CPU1 复位时：
+
+```sh
+/path/to/openocd/src/openocd -s /path/to/openocd/tcl \
+  -c 'set K230D_START_CPU1 1' -f ports/k230d/openocd/ch347-dual.cfg
+```
+
+配置先设置 CPU1 的复位暂停请求，再解除复位，等待其暂停后读取信息。
+CPU1 保持暂停，CPU0 恢复查询前的运行状态；不写入启动程序或改变启动向量。
+继续运行 CPU1 前，应加载所需固件并设置正确的入口 PC；系统初始化由该固件负责。
+GDB 端口分别为 CPU0 的 `3333` 和 CPU1 的 `3334`。
+
 ### CKLink
 
 需要包含 CKLink 驱动及复合设备 bulk IN 端点修复的 OpenOCD，并为 USB
