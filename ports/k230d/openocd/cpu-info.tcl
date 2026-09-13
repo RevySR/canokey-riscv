@@ -1,4 +1,18 @@
 # CPU identification for the K230D RISC-V target.
+proc k230d_cpuid_revision {cpuid} {
+    if {![dict exists $cpuid 0] || ![dict exists $cpuid 1]} {
+        return "Unknown"
+    }
+    set word0 [dict get $cpuid 0]
+    set word1 [dict get $cpuid 1]
+    if {($word0 >> 28) != 0 || ($word1 >> 28) != 1 || ($word0 & 7) != 5} {
+        return "Unknown"
+    }
+    # MCPUID format 5: WORD1[27:24] = R, [23:18] = S, [17:12] = P.
+    return [format "R%dS%dP%d" [expr {($word1 >> 24) & 15}] \
+        [expr {($word1 >> 18) & 63}] [expr {($word1 >> 12) & 63}]]
+}
+
 proc k230d_print_cpu_info {target regs cpuid} {
     set vendor [dict get $regs mvendorid]
     set arch [dict get $regs marchid]
@@ -25,6 +39,7 @@ proc k230d_print_cpu_info {target regs cpuid} {
 
     echo "CPU identification ($target)"
     echo "  Model: $model"
+    echo "  Revision: [k230d_cpuid_revision $cpuid]"
     echo "  Hart: [dict get $regs mhartid], XLEN: $xlen"
     echo "  MISA extensions: [join $extensions { }]"
     foreach name {mvendorid marchid mimpid misa} {
