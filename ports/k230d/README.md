@@ -78,18 +78,39 @@ sudo dd if=ports/k230d/build/canokey-k230d-sd.img of=/dev/sdX bs=4M conv=fsync s
 
 ## JTAG 调试
 
+### CH347F
+
+需要启用 `ch347` 驱动的 OpenOCD，并为 USB 设备 `1a86:55de` 配置 udev
+访问权限。配置使用 1.875 MHz JTAG 时钟，连接 CPU0；GDB 和 TCL 服务仅监听本机。
+
+```sh
+/path/to/openocd/src/openocd -s /path/to/openocd/tcl \
+  -f ports/k230d/openocd/ch347.cfg
+```
+
+### CKLink
+
 需要包含 CKLink 驱动及复合设备 bulk IN 端点修复的 OpenOCD，并为 USB
 设备 `32bf:b210` 配置 udev 访问权限。
 
 ```sh
 /path/to/openocd/src/openocd -s /path/to/openocd/tcl \
   -f ports/k230d/openocd/cklink.cfg -c "riscv set_mem_access progbuf"
-python3 ports/k230d/tools/load_firmware.py ports/k230d/build/canokey-k230d-sd.elf
 ```
 
 连接超时时可尝试降低 `adapter speed` 至 200。该 CKLink 驱动未实现
-物理 TRST 控制。加载器会清理缓存，下载并校验完整 ELF；重载时不要只
-跳回 `_start`，否则 `.data` 中的初始化状态不会恢复。
+物理 TRST 控制。
+
+### 加载固件
+
+启动所选探针的 OpenOCD 后，在另一个终端执行：
+
+```sh
+python3 ports/k230d/tools/load_firmware.py ports/k230d/build/canokey-k230d-sd.elf
+```
+
+加载器会清理缓存，下载并校验完整 ELF；重载时不要只跳回 `_start`，
+否则 `.data` 中的初始化状态不会恢复。
 
 确认输入为 `firmware_state.touch_request=1`（短按）或 `2`（长按），
 一秒后过期。没有自动确认模式，固件不访问 INT0/PMU 按键。
