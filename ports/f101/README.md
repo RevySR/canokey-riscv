@@ -159,29 +159,31 @@ TCK 接 DAT2，不能接 SD_CLK；TDI、TDO 按同名信号连接，不交叉。
 ### Hypercard CPU/MCU 排针
 
 对于带有 CPU、MCU 两列，各列依次标注 GND、TCK、VREF、TMS 的 Hypercard
-插卡转接板，按下表连接。该丝印用于双路两线调试，和 F101 四线 JTAG 的
+插卡转接板，按下图连接。该丝印用于双路两线调试，和 F101 四线 JTAG 的
 功能不同；F101 需要同时使用两列排针。
+
+![F101 通过 Hypercard 排针连接 CH347](docs/hypercard-ch347.svg)
+
+图的上半部分保留转接卡 PCB 原图，下半部分标出 F101 的 CH347 接法。
+原图左侧 TF 触点从上到下为 8–1，右侧排针 CPU 列在左、MCU 列在右。
+原图中的 JTAG0、JTAG1 网络名不代表 F101 的引脚功能，应按下半部分及下表接线。
+下半部分左右两侧的信号都接到同一只 CH347，按 CH347 模块上的信号名称找端子。
 
 | 转接卡列 | 列内脚号与丝印 | 实际 TF 触点 | 接 CH347 |
 | --- | --- | --- | --- |
 | CPU | 1 / GND | 6 / VSS | GND |
-| CPU | 2 / TCK | 8 / DAT1 | **TMS** |
+| CPU | 2 / TCK | 8 / DAT1 | TMS |
 | CPU | 3 / VREF | 4 / VDD | 仅接外部 VTref 输入，否则不接 |
-| CPU | 4 / TMS | 1 / DAT2 | **TCK** |
+| CPU | 4 / TMS | 1 / DAT2 | TCK |
 | MCU | 1 / GND | 6 / VSS | GND，与 CPU 列共地 |
-| MCU | 2 / TCK | 3 / CMD | **TDO** |
+| MCU | 2 / TCK | 3 / CMD | TDO |
 | MCU | 3 / VREF | 4 / VDD | 与 CPU 列 VREF 相连 |
-| MCU | 4 / TMS | 7 / DAT0 | **TDI** |
+| MCU | 4 / TMS | 7 / DAT0 | TDI |
 
-按板上列名和行丝印定位，连接关系为：
-
-```text
-卡上丝印          CPU 列接 CH347       MCU 列接 CH347
-GND  (1)             GND                 GND
-TCK  (2)             TMS                 TDO
-VREF (3)          外部参考输入         同一条卡槽电源
-TMS  (4)             TCK                 TDI
-```
+CPU 列的 TCK、TMS 丝印分别接 CH347 的 TMS、TCK；MCU 列的 TCK、TMS
+丝印分别接 CH347 的 TDO、TDI。两列 GND 已相连，接其中一处即可。
+F101 用自身 USB 供电，CH347 设置为 3.3 V JTAG；不要将 CH347 的 3V3 或
+5V 电源输出接到任一 VREF 排针。
 
 ### 启动 OpenOCD
 
