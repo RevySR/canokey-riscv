@@ -82,6 +82,9 @@ sudo dd if=ports/k230d/build/canokey-k230d-sd.img of=/dev/sdX bs=4M conv=fsync s
 
 需要启用 `ch347` 驱动的 OpenOCD，并为 USB 设备 `1a86:55de` 配置 udev
 访问权限。配置使用 1.875 MHz JTAG 时钟，连接 CPU0；GDB 和 TCL 服务仅监听本机。
+连接后自动输出 CPU 型号、hart、MISA 和玄铁 MCPUID。型号按已确认的硬件标识
+匹配，其他标识显示为 Unknown。读取时会短暂暂停正在运行的 CPU，结束后恢复；
+已经暂停的 CPU 保持暂停。可在 OpenOCD 控制台再次执行 `k230d_cpu_info`。
 
 ```sh
 /path/to/openocd/src/openocd -s /path/to/openocd/tcl \
