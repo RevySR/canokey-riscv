@@ -197,6 +197,24 @@ xfel write32 0x0200178c 0x10001
   -f ports/f101/openocd/ch347.cfg
 ```
 
+CKLink Lite 使用相同的 TF 信号映射，TCK、TMS、TDI、TDO、GND 分别连接。
+使用启用 `cklink` 驱动的 OpenOCD，并为 USB 设备 `32bf:b210` 配置访问权限。
+CKLink 的外部 VTref 输入接卡槽 3.3 V，不能将探针电源输出接到卡槽电源。
+进入 FEL 后启动：
+
+```sh
+xfel jtag
+xfel write32 0x0200178c 0x10001
+/path/to/openocd/src/openocd -s /path/to/openocd/tcl \
+  -f ports/f101/openocd/cklink.cfg
+```
+
+CKLink 配置使用五线 JTAG、200 kHz，卡槽没有复位信号，因此不连接复位线。
+其批量扫描协议不返回 IR 数据，且扫描长度最多为 255 位；配置针对单个已知
+TAP 关闭 IR 捕获校验，以短扫描读取并校验 IDCODE，避免自动长扫描失败。
+已验证 CKLink Lite 固件 3.7 可识别 `0x90000b6f`，CPU 为
+`C907FDV-rv32`、版本 `R0S0P16`，支持暂停、读取寄存器和恢复运行。
+
 连接后自动输出 CPU 型号、硬件版本、MISA 和 MCPUID；也可执行
 `f101_cpu_info` 再次查询。查询会短暂暂停正在运行的 CPU，结束后恢复；
 已经暂停的 CPU 保持暂停。GDB 端口为 `3333`，仅监听本机。
